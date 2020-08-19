@@ -693,11 +693,12 @@ class GuiMainPulseSequence(egg.gui.Window):
         cc = Converter()
         self.data_array = cc.sequence_to_FPGA(self.sequence, repetition=self.rep)
         time_elapsed = time.time() - time_start
-        _debug('Time for conversion: %f sec'%time_elapsed)
         
         # Note the data lenght
         length = len(self.data_array)
-        self.label_data_length.set_text('FPGA data length: %d'%length )
+        text = ('FPGA data length: %d'%length+
+                '\nTime for conversion: %f sec'%time_elapsed)
+        self.label_data_length.set_text(text )
         # Note also the lentght of each block
         self.length_data_block_s = cc.get_length_data_block_s()
 
