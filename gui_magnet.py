@@ -55,7 +55,7 @@ class GUISingleActuator(_mp.visa_tools.visa_gui_base):
         _debug('GUISingleActuator.__init__()')
         
         # Run the basic stuff.
-        _mp.visa_tools.visa_gui_base.__init__(self, name, show, block, ApiActuator, timeout=timeout, write_sleep=write_sleep, pyvisa_py=pyvisa_py, hello_query='1VE?', baud_rate=921600)
+        _mp.visa_tools.visa_gui_base.__init__(self, name, show, block, ApiActuator, timeout=timeout, write_sleep=write_sleep, pyvisa_py=pyvisa_py)
     
         #Give a name to the GUI, for helping debugging
         self.name = 'Bibi'
@@ -349,7 +349,7 @@ class GUIMagnetSweepLines(egg.gui.Window):
         
         # tree dictionnarry for some settings
         self.treeDic_settings = egg.gui.TreeDictionary(autosettings_path='setting_magSweepLines')
-        self.place_object(self.treeDic_settings, row=3, column=0, column_span=2)
+        self.place_object(self.treeDic_settings, row=5, column=0, column_span=2)
 
         self.treeDic_settings.add_parameter('time_per_point', 10, 
                                             type='float', step=0.1, 
@@ -359,19 +359,108 @@ class GUIMagnetSweepLines(egg.gui.Window):
                                             type='float', step=0.1,
                                             bounds=[0.0001, None], suffix=' um',
                                             tip='Distance between each point to record')
+        # Add a table for the trajectories of the lines. 
+        self.table_trajectories  = egg.gui.Table()
+        self.place_object(self.table_trajectories, row=6, column=0, column_span=2) 
+        # Fill it with some data
+        xs = np.linspace(1,4, 7)
+        ys = np.linspace(5,7, 7)
+        zs = np.linspace(19, 23, 7)
+        self.table_trajectories_fill(xs, ys, zs)
+
+        #Add a button for removing a row
+        self.button_remove_row = egg.gui.Button('Remove a row :/')
+        self.place_object(self.button_remove_row,row=4, column=0, alignment=1)
+        self.connect(self.button_remove_row.signal_clicked, self.button_remove_row_clicked )
+
+        #Add a button for add a row
+        self.button_add_row = egg.gui.Button('Add a row :3')
+        self.place_object(self.button_add_row,row=4, column=1, alignment=1)
+        self.connect(self.button_add_row.signal_clicked, self.button_add_row_clicked )
+        
+        #Add a button for saving the current settings
+        self.button_save_settings = egg.gui.Button('Save current settings')
+        self.place_object(self.button_save_settings,row=4, column=2, alignment=1)
+        self.connect(self.button_save_settings.signal_clicked, self.button_save_settings_clicked )
+
         # Add a label
         self.label_info = self.place_object(egg.gui.Label(), 1,2 )
         self.label_info_update() 
         
         # Attempt to make the button together
-        self.set_row_stretch(3, 10)
+        self.set_row_stretch(6, 10)
         self.set_column_stretch(2, 10)        
+
+    def table_trajectories_fill(self, xs, ys, zs):
+        """
+        Fill up the table with the positions.
         
+        xs, ys,zs:
+            Same size list of x, y and z. 
+        
+        Return a string being:
+            A succes message or 
+            An error message corresponding to what happened. 
+        """
+        _debug('GUIMagnetSweepLines: table_trajectories_fill')
+        
+        #Try to open the data
+        try: 
+            #First check if the lenghts matche
+            if not (len(xs) == len(ys)):
+                return 'Lenght of xs and ys do not match !'
+            if not (len(ys) == len(zs)):
+                return 'Lenght of ys and zs do not match !'  
+            if not (len(zs) == len(xs)):
+                return 'Lenght of xs and zs do not match !' 
+            
+            #If we pass here, we are ready to extract the position from the data 
+            #First destroy the previous table
+            while (self.table_trajectories.get_row_count() > 0):
+                self.table_trajectories._widget.removeRow(0)
+
+            # The first row will be a label for indicating what are each collumns
+            self.table_trajectories.set_value(column=0, row=0, value='xs (um)')
+            self.table_trajectories.set_value(column=1, row=0, value='ys (um)') 
+            self.table_trajectories.set_value(column=2, row=0, value='zs (um)')                 
+            #Then input the new one. 
+            for i in range(0, len(xs) ):
+                #Extract the x position 
+                self.table_trajectories.set_value(column=0, row=i+1, value=xs[i])
+                #Extract the y position 
+                self.table_trajectories.set_value(column=1, row=i+1, value=ys[i])                
+                #Extract the z position 
+                self.table_trajectories.set_value(column=2, row=i+1, value=zs[i]) 
+                
+            return 'Successfully fill up the table'
+            
+        except: 
+            return 'Error in reading the data from the file :S '        
+
+    def button_add_row_clicked(self):
+        """
+        Add a row on the table
+        """
+        _debug('GUIMagnetSweepLines.button_add_row_clicked')
+        N = self.table_trajectories.get_row_count()
+        self.table_trajectories.set_value(column=0, row=N, value=0)
+        self.table_trajectories.set_value(column=1, row=N, value=0) 
+        self.table_trajectories.set_value(column=2, row=N, value=0)      
+        
+    def button_remove_row_clicked(self):
+        """
+        Remove the last row on the table
+        """
+        _debug('GUIMagnetSweepLines.button_remove_row_clicked')
+        N = self.table_trajectories.get_row_count()
+        if N>1:
+            self.table_trajectories._widget.removeRow(N-1)    
             
     def label_info_update(self):
         """
         Adjust the info shown with respect to the settings
         """
+        _debug('GUIMagnetSweepLines.label_info_update')
         #Set the text. If sucess, the text is the name of the file. Otherwise it is an error message. 
         txt = ('Settings: '+ self.path_setting.split('/')[-1]+
                '\nStatut: '+ self.statut +
@@ -400,10 +489,48 @@ class GUIMagnetSweepLines(egg.gui.Window):
         #Updat the info shown
         self.statut = 'Settings are now loaded'
         self.label_info_update()
+        self.table_trajectories_fill(self.xs_setting,
+                                     self.ys_setting,
+                                     self.zs_setting)
+        
         
         # Enable the run button, since we now have data
         self.button_run.enable()
         self.button_run.set_colors(background='green')
+
+    def button_save_settings_clicked(self, *a):
+        """
+        Save the settings of the line sweep
+        """
+        _debug('GUIMagnetSweepLines._button_save_list_toggled()')
+        
+        # First need to update all the settings in the databox
+        
+        # Reinitiead the databox of the settings
+        self.databox_settings = _s.data.databox()
+        
+        # The three dictionary
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databox_settings.insert_header(key , self.treeDic_settings[key])
+        # Add the trajectories
+        N = self.table_trajectories.get_row_count()
+        xs = []
+        ys = []
+        zs = []
+        for i in range (1, N):
+            x = self.table_trajectories.get_value(column=0, row=i)
+            y = self.table_trajectories.get_value(column=1, row=i)
+            z = self.table_trajectories.get_value(column=2, row=i)
+            xs.append(x)
+            ys.append(y)
+            zs.append(z)
+        self.databox_settings['xs'] = xs
+        self.databox_settings['ys'] = ys
+        self.databox_settings['zs'] = zs
+        
+        # Now save
+        self.databox_settings.save_file()
         
     def button_look_setting_clicked(self):
         """

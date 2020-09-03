@@ -1,5 +1,5 @@
 /Actuator/VISA|expanded	True
-/Actuator/VISA/Device	'COM3'
+/Actuator/VISA/Device	'Simulation'
 /Actuator/VISA/Device|expanded	True
 /Actuator/Motion|expanded	True
 /Actuator/Motion/Target_position	23.0
