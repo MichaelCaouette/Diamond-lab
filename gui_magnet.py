@@ -299,7 +299,7 @@ class GUIMagnetSweepLines(egg.gui.Window):
             The gui object "GUIMagnet" that is used to control the three 
             actuators. 
         """
-        _debug('GUIMagnetSweepLines: __init__', name)
+        _debug('GUIMagnetSweepLines: __init__')
         _debug('The best way to predict your future is to create it. – Abraham Lincoln')
         
         self.magnet = magnet3 # Steal the magnet gui, mouahhaha
@@ -352,13 +352,18 @@ class GUIMagnetSweepLines(egg.gui.Window):
         self.place_object(self.treeDic_settings, row=5, column=0, column_span=2)
 
         self.treeDic_settings.add_parameter('time_per_point', 10, 
-                                            type='float', step=0.1, 
+                                            type='float',  
                                             bounds=[0,None], suffix=' ms',
                                             tip='How much time to elapsed between recorded points. ') 
         self.treeDic_settings.add_parameter('resolution', 1, 
-                                            type='float', step=0.1,
+                                            type='float', 
                                             bounds=[0.0001, None], suffix=' um',
                                             tip='Distance between each point to record')
+        #TODO put the following in the higher level gui, since it is specific to the experiment
+        self.treeDic_settings.add_parameter('nb_line_before_optimize', 1, 
+                                            type='int', 
+                                            bounds=[0, None],
+                                            tip='Number of line to sweep before triggering the optimization')
         # Add a table for the trajectories of the lines. 
         self.table_trajectories  = egg.gui.Table()
         self.place_object(self.table_trajectories, row=6, column=0, column_span=2) 
@@ -437,6 +442,34 @@ class GUIMagnetSweepLines(egg.gui.Window):
         except: 
             return 'Error in reading the data from the file :S '        
 
+    def databox_setting_update(self):
+        """
+        Update the contain of the databox_setting for it to matche the settings
+        on the gui. 
+        """
+        # Reinitiead the databox of the settings
+        self.databox_settings = _s.data.databox()
+        
+        # The three dictionary
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databox_settings.insert_header(key , self.treeDic_settings[key])
+        # Add the trajectories in the table
+        N = self.table_trajectories.get_row_count()
+        xs = []
+        ys = []
+        zs = []
+        for i in range (1, N):
+            x = self.table_trajectories.get_value(column=0, row=i)
+            y = self.table_trajectories.get_value(column=1, row=i)
+            z = self.table_trajectories.get_value(column=2, row=i)
+            xs.append(float(x))
+            ys.append(float(y))
+            zs.append(float(z))
+        self.databox_settings['xs'] = xs
+        self.databox_settings['ys'] = ys
+        self.databox_settings['zs'] = zs
+        
     def button_add_row_clicked(self):
         """
         Add a row on the table
@@ -480,19 +513,28 @@ class GUIMagnetSweepLines(egg.gui.Window):
         #Load the list. 
         self.databox_settings = _s.data.load(text='Load the set of lines to sweep')
         self.path_setting = self.databox_settings.path
-        # Get the path 
-        self.xs_setting = self.databox_settings['xs']
-        self.ys_setting = self.databox_settings['ys']
-        self.zs_setting = self.databox_settings['zs']
-        self.nb_iter = len(self.xs_setting)
         
         #Updat the info shown
         self.statut = 'Settings are now loaded'
         self.label_info_update()
-        self.table_trajectories_fill(self.xs_setting,
-                                     self.ys_setting,
-                                     self.zs_setting)
-        
+        # Fill up the table
+        self.table_trajectories_fill(self.databox_settings['xs'],
+                                     self.databox_settings['ys'],
+                                     self.databox_settings['zs'])
+        # Fill up the three dictionnary if the corresponding settings exists in the databox
+        for key in self.treeDic_settings.get_keys():
+            # For each available settings
+            try:
+                # Set it if it is present in the databox
+                self.treeDic_settings[key] = self.databox_settings.h(key)
+            except:
+                _debug('Didnt found the key', key)
+                pass
+#        try:
+#            r = self.databox_settings.h('resolution')
+#            self.treeDic_settings['resolution'] = float(r)   
+#        except:
+#            pass
         
         # Enable the run button, since we now have data
         self.button_run.enable()
@@ -505,29 +547,7 @@ class GUIMagnetSweepLines(egg.gui.Window):
         _debug('GUIMagnetSweepLines._button_save_list_toggled()')
         
         # First need to update all the settings in the databox
-        
-        # Reinitiead the databox of the settings
-        self.databox_settings = _s.data.databox()
-        
-        # The three dictionary
-        for key in self.treeDic_settings.get_keys():
-            # Add each element of the dictionnary three
-            self.databox_settings.insert_header(key , self.treeDic_settings[key])
-        # Add the trajectories
-        N = self.table_trajectories.get_row_count()
-        xs = []
-        ys = []
-        zs = []
-        for i in range (1, N):
-            x = self.table_trajectories.get_value(column=0, row=i)
-            y = self.table_trajectories.get_value(column=1, row=i)
-            z = self.table_trajectories.get_value(column=2, row=i)
-            xs.append(x)
-            ys.append(y)
-            zs.append(z)
-        self.databox_settings['xs'] = xs
-        self.databox_settings['ys'] = ys
-        self.databox_settings['zs'] = zs
+        self.databox_setting_update()
         
         # Now save
         self.databox_settings.save_file()
@@ -537,6 +557,10 @@ class GUIMagnetSweepLines(egg.gui.Window):
         Show the lines that the magnet should follow
         """
         _debug('GUIMagnetSweepLines: button_look_setting_clicked')
+
+        # First need to update all the settings in the databox
+        self.databox_setting_update()
+        
         # Pop up a GUI
         plot_magSweepLinesSettings(self.databox_settings, self.path_setting)
         
@@ -547,7 +571,7 @@ class GUIMagnetSweepLines(egg.gui.Window):
         # Load the scanned data
         d_scanned_data = _s.data.load(text='Load a scanned data set')
         # Load the setting
-        d_settings     = _s.data.load(text='Load the settong fpor comparison')
+        d_settings     = _s.data.load(text='Load the setting fpor comparison')
         # Pop up a GUI
         plot_magSweepLinesResult(d_scanned_data, d_settings)
 
@@ -562,10 +586,11 @@ class GUIMagnetSweepLines(egg.gui.Window):
         # Put some header
         self.databox_save_scan.insert_header('name', 'Hakuna matata')
         self.databox_save_scan.insert_header('date', self.info_date)
+        # Copy the tree dictionnary
         for key in self.treeDic_settings.get_keys():
             # Add each element of the dictionnary three
             self.databox_save_scan.insert_header(key , self.treeDic_settings[key])        
-        # Add each column
+        # Add each column for the scanned points
         self.databox_save_scan['xs'] = self.xs_scanned
         self.databox_save_scan['ys'] = self.ys_scanned
         self.databox_save_scan['zs'] = self.zs_scanned  
@@ -577,7 +602,7 @@ class GUIMagnetSweepLines(egg.gui.Window):
 
     def button_reset_clicked(self):
         """
-        Reset the iteration and stop the runnin
+        Reset the iteration and stop the running
         """
         _debug('GUIMagnetSweepLines: button_reset_clicked')
 
@@ -623,6 +648,10 @@ class GUIMagnetSweepLines(egg.gui.Window):
         
         # If we are at the begining
         if self.iter == 0:
+            
+            # Update the settings of the databox
+            self.databox_setting_update()
+            
             # Extract the settings
             self.resolution = self.treeDic_settings['resolution']
             self.time_per_point = self.treeDic_settings['time_per_point']
@@ -635,6 +664,12 @@ class GUIMagnetSweepLines(egg.gui.Window):
                 self.time_per_point = self.resolution/self.speed
                 self.treeDic_settings['time_per_point'] = self.time_per_point
                 print('Warning. Speed was too high. Auto set the time for maximum allowed speed.')
+
+            # Get the path 
+            self.xs_setting = self.databox_settings['xs']
+            self.ys_setting = self.databox_settings['ys']
+            self.zs_setting = self.databox_settings['zs']
+            self.nb_iter = len(self.xs_setting)
             
             # Signal the initialization
             self.event_initiate_sweep()

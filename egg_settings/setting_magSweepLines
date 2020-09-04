@@ -1,5 +1,7 @@
-time_per_point	250.0
+time_per_point	50.4
 time_per_point|expanded	True
-resolution	100.0
+resolution	99.0
 resolution|expanded	True
+nb_line_before_optimize	1
+nb_line_before_optimize|expanded	True
 
