@@ -1,5 +1,5 @@
 /Anana/VISA|expanded	True
-/Anana/VISA/Device	'USB0::0x03EB::0xAFFF::121-227450000-0385::INSTR'
+/Anana/VISA/Device	'Simulation'
 /Anana/VISA/Device|expanded	True
 /Anana/Generate-List|expanded	True
 /Anana/Generate-List/f1	3100000000.0
