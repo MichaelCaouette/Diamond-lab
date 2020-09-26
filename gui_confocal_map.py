@@ -49,7 +49,7 @@ class GUIMap(egg.gui.Window):
         Initialize 
         
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of the fpga must already be open.
             
@@ -177,7 +177,7 @@ class GUIMap(egg.gui.Window):
                                            tip='Number of point to scan in the y direction.')   
         
         self.treeDic_settings.add_parameter('Slice_shown', 0, 
-                                           type='int', step=1, 
+                                           type='int', 
                                            suffix=' /%d'%(self.nb_max_slice-1),
                                            bounds=[0, self.nb_max_slice-1],
                                            tip='Which scan to shown')  
@@ -194,7 +194,7 @@ class GUIMap(egg.gui.Window):
                                            bounds=[None,None],
                                            tip='Factor by which we stretch the yaxis')  
         
-        self.list_scanning_mode = ['Sawtooth', 'Snake', 'Diagonal_sweep', 'Spiral']
+        self.list_scanning_mode = ['Sawtooth', 'Snake', 'Random', 'Diagonal_sweep', 'Spiral']
         self.treeDic_settings.add_parameter('Scanning_mode', 0, 
                                            type='list', 
                                            values=self.list_scanning_mode,
@@ -278,8 +278,11 @@ class GUIMap(egg.gui.Window):
         
         # Prepare the fpga with the values    
         self.fpga.prepare_AOs([AOz], [Vz])
-        # Write it now ;) 
-        self.fpga.write_output()        
+        
+        # Run the FPGA for updating its settings
+        # It gonna run also the pre-existing pulse sequence. Hopefully it's 
+        # gonna be the counter. 
+        self.fpga.lets_go_FPGA()
 
         # Call the event to say "hey, stuff changed on the fpga"
         self.event_fpga_change()
@@ -292,9 +295,9 @@ class GUIMap(egg.gui.Window):
         
         n = self.treeDic_settings['Slice_shown']
         
-        # Ajdust the value if it exceed the sotred data
+        # Ajdust the value if it exceed the stored data
         if n>=self.nb_of_slice:
-            self.treeDic_settings['Slice_shown'] = self.nb_of_slice
+            self.treeDic_settings['Slice_shown'] = self.nb_of_slice-1
             n = self.treeDic_settings['Slice_shown']
         # Get the slice
         self.databox_scan = self.list_databox_scans[n]
@@ -454,16 +457,18 @@ class GUIMap(egg.gui.Window):
         
         # Get the databob
         ds = sm.data.load_multiple(text='Load one or more scans')
-     
-        # Take the last element to show. 
-        self.databox_scan = ds[-1]
- 
-        # If we selected more than one databox, set them as the new list
+        
         if len(ds)>1:
+            # If we selected more than one databox, set them as the new list
             self.list_databox_scans = ds
         else:
-            # Store the image
-            self.store_scan()
+            # If we selected only one databox, overid the last scan
+            self.list_databox_scans[-1] = ds[0]
+#            # Store the image
+#            self.store_scan()
+
+        # Take the last element to show. 
+        self.databox_scan = self.list_databox_scans[-1]
             
         # Extract the data
         self.label_slice_date = self.databox_scan.h('date')
@@ -474,7 +479,16 @@ class GUIMap(egg.gui.Window):
         self.Vymax = self.databox_scan.h('Vy_max')
         self.Ny    = self.databox_scan.h('Ny')
         
-        self.Z = np.zeros([self.Nx, self.Ny])
+        # Set the tree dictionnary, in case that we would like to rescan the 
+        # Same parameter
+        self.treeDic_settings['X_min'] = self.Vxmin
+        self.treeDic_settings['Y_min'] = self.Vymin
+        self.treeDic_settings['X_max'] = self.Vxmax
+        self.treeDic_settings['Y_max'] = self.Vymax
+        self.treeDic_settings['Nb_point_X'] = self.Nx 
+        self.treeDic_settings['Nb_point_Y'] = self.Ny
+        
+        self.Z = np.zeros([self.Ny, self.Nx])
         # Add each column 
         for i in range(self.Ny):
             self.Z[i] = self.databox_scan['Col%d'%i]      
@@ -482,9 +496,6 @@ class GUIMap(egg.gui.Window):
         # Update the image
         self.initialize_image()
         self.update_image()
-        
-        # Store the image
-        self.store_scan()
         
         
     def ROI_subregion_change(self):
@@ -632,7 +643,7 @@ class GUIMap(egg.gui.Window):
             self.databox_scan['Col%d'%i] = col              
 
 
-        if self.nb_of_slice >= self.nb_max_slice:
+        if self.nb_of_slice > self.nb_max_slice:
             # Pop the oldest stored slice if we exceed the nb of slices
             _debug('GUIMap: store_scan: poping oldest scan.')
             self.list_databox_scans.pop(0)
@@ -691,6 +702,8 @@ class GUIMap(egg.gui.Window):
             self.scan_spiral()   
         elif self.treeDic_settings['Scanning_mode'] == 'Diagonal_sweep':
             self.scan_diagonal_sweep()
+        elif self.treeDic_settings['Scanning_mode'] == 'Random':
+            self.scan_random_points()   
             
         # At this poin the scan is completed or stopped
         # Store the scan
@@ -832,6 +845,80 @@ class GUIMap(egg.gui.Window):
             # Allow the GUI to update. This is important to avoid freezing of the GUI inside loops
             self.process_events()    
 
+    def scan_random_points(self):
+        """
+        This scans random points on the map. 
+        """
+        _debug('GUIMap: scan_random_points')
+        
+        self.Ntotal = self.Nx*self.Ny # Total number of point to scan
+        # create a list for labelling ALL the points
+        self.list_pts = range(self.Ntotal) # This 
+        
+        # Scan until all the points got scanned
+        self.iteration = 0
+        while self.is_scanning and len(self.list_pts)>0:
+            
+            # Note the time at which a batch starts
+            self.time_row_start = time.time()
+            self.iteration +=1 
+            _debug('GUIMap: scan_random_points', self.iteration)
+            
+            # To speed up, do batches before updating
+            for i in range(self.Nx):
+                # Pick a random number
+                self.pt_choosen = np.random.choice(self.list_pts)
+                # Extract the corresponding row and column
+                self.row    = int(self.pt_choosen/self.Nx) 
+                self.column = int(self.pt_choosen - self.Nx*self.row)
+                # Delete this number from the list for the next pickup
+                self.index_to_delete = np.where(self.list_pts==self.pt_choosen)[0][0]
+                self.list_pts = np.delete(self.list_pts, self.index_to_delete)
+#                # for debugging
+#                print('self.index_to_delete = ',self.index_to_delete)
+#                print('len(self.list_pts) = ',len(self.list_pts))
+                
+                # Get the voltrage in Y
+                Vy = self.ys[self.row]            
+                # Get the voltage in x
+                Vx = self.xs[self.column]        
+
+                # Update the voltage of the AOs
+                self.list_AOs = [self.AOx, self.AOy, self.AOz]
+                self.list_Vs = [Vx, Vy, self.Vz]
+                self.fpga.prepare_AOs(self.list_AOs, self.list_Vs)
+                
+                # Get the count, finally ;) 
+                # Two step: runt he pulse pattern and get the counts. 
+                self.fpga.run_pulse() # This will also write the AOs
+                self.counts =  self.fpga.get_counts()[0]
+                self.counts_per_sec = 1e3*self.counts/self.count_time_ms
+                
+#                # Since zero is boring, let's add something
+#                image =  100+np.random.poisson( np.abs(10000*np.cos(Vx*Vy*0.5)) )
+#                self.Z[self.row][self.column]= image
+                
+                self.Z[self.row][self.column] = self.counts_per_sec     
+                
+                   
+            # Update the image after each row   
+            self.update_image()
+            
+            # Note how much time it takes for the row
+            self.time_row_elapsed = time.time() - self.time_row_start
+            
+            # Update the progress bar
+            progress = 100*(self.iteration)/self.Ny
+            self.progress_bar.setValue(progress)
+            # Update the label for the progress
+            nb_iter_remaining = self.Ny - self.iteration # Number of iteration remaining
+            sec = self.time_row_elapsed*nb_iter_remaining
+            self.label_progress.set_text('Time remaining: %.2f s'%sec)
+            
+            # Allow the GUI to update. This is important to avoid freezing of the GUI inside loops
+            self.process_events()    
+
+            
     def scan_diagonal_sweep(self):
         """
         This scans by sweeping in diagonal. 
@@ -883,8 +970,9 @@ class GUIMap(egg.gui.Window):
                 
                 # Since zero is boring, let's add something
 #                image = self.counts + np.random.poisson( np.abs(1000*np.cos(Vx*Vy*0.5)) )
-#                self.Z[j][i]= image
+#                self.Z[j][i]= 100+np.random.poisson( np.abs(10000*np.cos(Vx*Vy*0.5)) )
                 self.Z[j][i] = self.counts_per_sec         
+                
                 
                     
             # Update the image after each row   
@@ -1026,9 +1114,12 @@ class GUIMap(egg.gui.Window):
         self.list_AOs = [self.AOx]
         # Prepare the voltage
         self.list_Vs = [Vx]
-        self.fpga.prepare_AOs(self.list_AOs, self.list_Vs)     
-        # Write in the fpga
-        self.fpga.write_output()
+        self.fpga.prepare_AOs(self.list_AOs, self.list_Vs)   
+        
+        # Run the FPGA for updating its settings
+        # It gonna run also the pre-existing pulse sequence. Hopefully it's 
+        # gonna be the counter. 
+        self.fpga.lets_go_FPGA()
 
         # Call the event to say "hey, stuff changed on the fpga"
         self.event_fpga_change()
@@ -1044,9 +1135,12 @@ class GUIMap(egg.gui.Window):
         self.list_AOs = [self.AOy]
         # Prepare the voltage
         self.list_Vs = [Vy]
-        self.fpga.prepare_AOs(self.list_AOs, self.list_Vs)     
-        # Write in the fpga
-        self.fpga.write_output()        
+        self.fpga.prepare_AOs(self.list_AOs, self.list_Vs)  
+    
+        # Run the FPGA for updating its settings
+        # It gonna run also the pre-existing pulse sequence. Hopefully it's 
+        # gonna be the counter. 
+        self.fpga.lets_go_FPGA()
 
         # Call the event to say "hey, stuff changed on the fpga"
         self.event_fpga_change()
@@ -1057,6 +1151,7 @@ class GUIMap(egg.gui.Window):
         That is useful for the implementation with other GUI that also 
         modifies the fpga. 
         """
+        _debug('GUIMap: update_GUI_with_fpga')
         
         if not(self.is_scanning): # Don't mess up with the scan lol
             # Update the value of the Z voltage
@@ -1219,7 +1314,7 @@ class PersonalColorMap():
 
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     
     _debug_enabled     = True
     _fc._debug_enabled = False

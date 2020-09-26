@@ -41,7 +41,7 @@ class GUIMainConfocal(egg.gui.Window):
     def __init__(self, fpga, name="Best confocal of the world", size=[1800,1000]): 
         """
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of the fpga must already be open.    
             
@@ -66,6 +66,9 @@ class GUIMainConfocal(egg.gui.Window):
         self.gui_outputs  .event_fpga_change = self.update_guis_but_gui_outputs
         self.gui_map      .event_fpga_change = self.update_guis_but_gui_map
         self.gui_optimizer.event_fpga_change = self.update_guis_but_gui_optimizer
+#        # test
+#        self.gui_optimizer.event_fpga_change = self.gui_outputs.update_GUI_with_fpga
+        
         # The fpga change of the gui count is not connected, because the event_fpga_change is not really called in this gui. 
       
         self.gui_optimizer.event_optimize_starts = self.before_optimization
@@ -187,12 +190,18 @@ class GUIMainConfocal(egg.gui.Window):
 
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     import gui_confocal_counts as cc
+    import gui_confocal_optimizer as co
+    import gui_confocal_DIOsAOs_control as cdc
+    import gui_confocal_map as cm
     
-    cc._debug_enabled  = True
+    cm._debug_enabled  = False
+    cdc._debug_enabled = False
+    co._debug_enabled  = True
+    cc._debug_enabled  = False
     _debug_enabled     = True
-    _fc._debug_enabled = False
+    _fc._debug_enabled = True
     
     print('Hey on es-tu bin en coton-watte')
     

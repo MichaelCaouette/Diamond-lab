@@ -42,7 +42,7 @@ class GUISaturation(egg.gui.Window):
         Initialize 
         
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of he fpga must already be open.        
         
@@ -206,6 +206,7 @@ class GUISaturation(egg.gui.Window):
             
             # Get the counts and intensity
             #TODO Remove the following line when the implementation will be completed. 
+            # The purpose is just to test the gui with fake counts
 #            time.sleep(0.3)
 #            print(time.ctime(time.time()))
 #            # Fake data
@@ -225,13 +226,20 @@ class GUISaturation(egg.gui.Window):
             
         # Stop the button if it was not stopped during the loop
         if self.is_running:
-            self.button_start_clicked()           
+            self.button_start_clicked()     
+            
+        # Add all the element of the three dictionnary in the databox
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databoxplot.insert_header(key , self.treeDic_settings[key])        
+            
+            
             
 
 
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     
     _debug_enabled     = True
     _fc._debug_enabled = False

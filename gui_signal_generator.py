@@ -172,7 +172,7 @@ class signal_generator_api(_mp.visa_tools.visa_api_base):
         
     def get_list_frequencies(self):
         """
-        Gets the list of frequencies.
+        Gets the list of frequencies. In Hz !
         """
         return self._api.get_list_frequencies()
         

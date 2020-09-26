@@ -634,7 +634,7 @@ if __name__=="__main__":
                     "\Pulsepattern(bet_FPGATarget_FPGAFULLV2_WZPA4vla3fk.lvbitx")
     resource_num = "RIO0"     
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     fpga_fake = _fc.FPGA_fake_api(bitfile_path, resource_num) # Create the api   
     fpga_fake.open_session()
     

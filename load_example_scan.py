@@ -40,7 +40,7 @@ ax.pcolor(xs, ys,d)
 ax.set_xlabel('x (um)')
 ax.set_ylabel('y (um)')
 ax.set_aspect('equal')
-plt.title(d.path, fontsize=7)
+plt.title(d.path, fontsize=9)
     
     
     

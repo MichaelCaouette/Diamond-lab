@@ -38,4 +38,4 @@ for i in range(len(d)-1):
 
 plt.legend()    
 plt.xlabel(label_s[0])
-plt.title(d.path, fontsize=7)
+plt.title(d.path, fontsize=9)

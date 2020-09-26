@@ -443,7 +443,9 @@ class GUIFPGAInstruction():
     The GUI permits to double click to show the times 
     
     """
-    def __init__(self, data_array, rep, length_data_block_s, tickDuration=1/120, nbChannel=16): 
+    def __init__(self, data_array, rep, length_data_block_s, 
+                 list_DIO_to_show = [],
+                 tickDuration=1/120, nbChannel=16): 
         """
         Initialize by sending the pulse pattern to plot
         
@@ -457,10 +459,19 @@ class GUIFPGAInstruction():
             length_data_block_s
             Array containt the length of each block in the sequence
             
+            list_DIO_to_show
+            (list of int) If not empty, only the DIO in the list will be shown. 
+            If empty, all the DIO will be shown.
+            
+        For example, if you want to show the whole data array instruction, you 
+        can initiate the GUI like this:
+            GUIFPGAInstruction(d, 1, [len(d)])
+            
         """    
         
         self.data_array = data_array
         self.length_data_block_s = length_data_block_s
+        self.list_DIO_to_show = list_DIO_to_show
         self.rep = rep 
         self.tickDuration = tickDuration
         self.nbChannel = nbChannel
@@ -580,17 +591,27 @@ class GUIFPGAInstruction():
             
             t1 = t0 + ticks
         
-            #Now plot the resulting instruction
+            #Now plot the resulting instruction, only for the DIO that we want to show
             for i, DIOstate in enumerate(DIOstates):
-                y = DIOstate+2*i
-                plt.plot([self.tickDuration*t0, self.tickDuration*t1], [y, y ],'.-', color='C%d'%i)
+                if len(self.list_DIO_to_show)>0:
+                    if i in self.list_DIO_to_show:
+                        y = DIOstate+2*i
+                        plt.plot([self.tickDuration*t0, self.tickDuration*t1], [y, y ],'.-', color='C%d'%i)                        
+                else:
+                    y = DIOstate+2*i
+                    plt.plot([self.tickDuration*t0, self.tickDuration*t1], [y, y ],'.-', color='C%d'%i)
             #Shift the next initial time for the plots
             t0 = t1
             
         #Plot the DIO with text
         for i, DIOstate in enumerate(DIOstates):
-            y = 2*i
-            plt.text(0, y, 'DIO %d'%i)
+            if len(self.list_DIO_to_show)>0:
+                if i in self.list_DIO_to_show:
+                    y = 2*i
+                    plt.text(0, y, 'DIO %d'%i)                       
+            else:
+                y = 2*i
+                plt.text(0, y, 'DIO %d'%i)
             
         plt.xlabel('Time (us)')
         plt.yticks([])

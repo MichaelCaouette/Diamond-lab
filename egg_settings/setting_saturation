@@ -1,0 +1,13 @@
+Wait_after_AOs	1
+Wait_after_AOs|expanded	True
+Count_time	50.0
+Count_time|expanded	True
+AO_to_scan	3
+AO_to_scan|expanded	True
+AO_min	1.0
+AO_min|expanded	True
+AO_max	7.0
+AO_max|expanded	True
+Nb_points	200
+Nb_points|expanded	True
+

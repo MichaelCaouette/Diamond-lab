@@ -14,6 +14,7 @@ import gui_pulser
 import gui_saturation
 import gui_pipulse_optimization
 import gui_magnet
+from converter import Converter # For converting the pattern for counting
 
 import sys # Useful for error handling
 import traceback
@@ -46,7 +47,7 @@ class GUIMainExperiment(egg.gui.Window):
     def __init__(self, fpga, name="Best experiment of the world", size=[1800,1000]): 
         """
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of the fpga must already be open.    
             
@@ -59,20 +60,29 @@ class GUIMainExperiment(egg.gui.Window):
         # Run the basic stuff for the initialization
         egg.gui.Window.__init__(self, title=name, size=size)
 
+        # Take the sacro-saint fpga
         self.fpga = fpga
-        
-        # Some attribute
-        self.pulse_was_running_before_optimizing = False
-        
         # Fill the GUI
         self.initialize_GUI()  
         
-        # Overrid some methods
-        # Overrid some methods
-        self.gui_pulser.event_optimize = self.optimize_pulse        
-#        self.gui_confocal.gui_optimizer.event_optimize_starts = self.before_optimization
-        self.gui_confocal.gui_optimizer.event_optimize_ends   = self.after_optimization
+        
+        # Some attribute
+#TODO remove this line if everything is cool.
+#        self.pulse_was_running_before_optimizing = False
+#        self.magnet_scan_line_was_running_before_optimizing = False
+        
 
+        
+        #TODO Important Better handlge the optimization during either the pulse
+        # Sequence or during the magnet scan. Very important, because we gonna 
+        # have other protocols which will want to use the optimizer !
+        # Maybe the information should be encoded in the specific GUIs themself !
+        # Overrid some methods
+#TODO remove this line if everything is cool.
+#        self.gui_pulser.event_optimize = self.pulser_optimize        
+#        self.gui_confocal.gui_optimizer.event_optimize_ends   = self.after_optimization
+#        self.gui_magnet.gui_sweep_lines.event_one_line_is_swept = self.magnet_scan_line_optimize
+        
     def initialize_GUI(self):
         """
         Fill up the GUI
@@ -81,11 +91,12 @@ class GUIMainExperiment(egg.gui.Window):
 
         # Prepare the GUI before to place them 
         self.gui_confocal   = gui_confocal_main.GUIMainConfocal(self.fpga)
-        self.gui_pulser     = gui_pulser.  GuiMainPulseSequence(self.fpga)
+        self.gui_pulser     = gui_pulser.  GuiMainPulseSequence(self.fpga, 
+                                                                self.gui_confocal.gui_optimizer)
         self.gui_saturation = gui_saturation.     GUISaturation(self.fpga)
-        self.gui_magnet     = gui_magnet.GUIMagnet()
-        #Connect the magnet with the counter
-        self.connect_magnet_with_counter()
+        self.gui_magnet     = gui_magnet.GUIMagnet(self.fpga, 
+                                                   self.gui_confocal.gui_optimizer)   
+        
         
         # Replace the optimer button outside, for easy access
         self.place_object(self.gui_confocal.gui_optimizer.button_optimize,
@@ -146,66 +157,11 @@ class GUIMainExperiment(egg.gui.Window):
         
         s = str(sys.last_value)
         self.label_checkbug.set_text('Last error: '+s)
-        
-
-    def optimize_pulse(self):
-        """
-        Optimize between loops of pulse sequences
-        """
-        
-        # The if might be not necessary, or it is overkill.
-        if not(self.gui_confocal.gui_optimizer.is_optimizing):
-            
-            # Only do that is it is running. 
-            #TODO CLean all that. Make this more clear and clean. 
-            if self.gui_pulser.is_running:
-                self.pulse_was_running_before_optimizing = True
-                # The if should prevent multiple click.
-                i = self.gui_pulser.iter
-                N_threshold = self.gui_pulser.Nloop_before_optimize
-                _debug('GUIMainExperiment :optimize_pulse:  i, N = %d, %d'%(i,N_threshold))
-                
-                # First pause the pulse
-                self.gui_pulser.button_start.click() # This should pause. 
-                # Then optimize
-                self.gui_confocal.gui_optimizer.button_optimize_clicked()    
-                
-            else:
-                self.pulse_was_running_before_optimizing = False
-
-    def after_optimization(self):
-        """
-        What to do after that the optimization is done.
-        """
-        _debug('GUIMainExperiment: after_optimization')
-        
-        # The if might be not necessary, or it is overkill.
-        if not(self.gui_confocal.gui_optimizer.is_optimizing): 
-            
-            if self.pulse_was_running_before_optimizing:
-                # Reconverted the sequence
-                
-                # Re-click on for continuing the pulse sequence. 
-                self.gui_pulser.button_start.click() # This continue the pulse           
-            
-            # Also re-call the method of the confocal, because we just overid it :P 
-            self.gui_confocal.after_optimization()
-
-    def connect_magnet_with_counter(self):
-        """
-        Connect the magnet scanner with the counter and etc. 
-        This is done mostly by overriding functions. 
-        """
-        _debug('GUIMainExperiment: connect_magnet_with_counter')
-#        # Overid the function
-#        self.gui_magnet.gui_sweep_lines.event_scan_line_checkpoint = 
-     
-        
  
      
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga 
     
     _debug_enabled     = True
     gui_pulser._debug_enabled = True
@@ -214,7 +170,7 @@ if __name__ == '__main__':
     gui_magnet._debug_enabled = False
     import gui_confocal_optimizer
     gui_confocal_optimizer._debug_enabled = True
-    _fc.debug_enabled = True
+    api_fpga.debug_enabled = False
     
     print('Hey on es-tu bin en coton-watte')
     
@@ -222,7 +178,7 @@ if __name__ == '__main__':
     bitfile_path = ("X:\DiamondCloud\Magnetometry\Acquisition\FPGA\Magnetometry Control\FPGA Bitfiles"
                     "\Pulsepattern(bet_FPGATarget_FPGAFULLV2_WZPA4vla3fk.lvbitx")
     resource_num = "RIO0"     
-    fpga = _fc.FPGA_api(bitfile_path, resource_num) # Create the api   
+    fpga = api_fpga.FPGA_api(bitfile_path, resource_num) # Create the api   
     fpga.open_session()
     
     self = GUIMainExperiment(fpga)

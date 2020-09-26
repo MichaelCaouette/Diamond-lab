@@ -42,7 +42,7 @@ class GUICounts(egg.gui.Window):
         Initialize 
         
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of he fpga must already be open.        
         
@@ -213,6 +213,7 @@ class GUICounts(egg.gui.Window):
         # Take counts until the elapsed time is higher than the desired 
         # acquisition time OR until we click on stop and is_taking_count gets false.
         while self.is_taking_counts:
+            
             # Get the counts (d'uh !)
             # Two step: runt he pulse pattern and get the counts. 
             self.fpga.run_pulse() 
@@ -287,7 +288,7 @@ class GUICounts(egg.gui.Window):
         That is useful for the implementation with other GUI that also 
         modifies the fpga. 
         """
-        _debug('GUIDIOsAOsControl: update_GUI_with_fpga')
+        _debug('GUICounts: update_GUI_with_fpga')
         # There is nothing to update with the fpga. 
         # The count time interval is note recored in the fpga, because it is 
         # hidden in the data array
@@ -295,7 +296,7 @@ class GUICounts(egg.gui.Window):
 
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     
     _debug_enabled     = True
     _fc._debug_enabled = False

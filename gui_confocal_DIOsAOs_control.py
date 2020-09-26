@@ -45,7 +45,7 @@ class GUIDIOsAOsControl(egg.gui.Window):
         Initialize 
         
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of he fpga must already be open.
         """    
@@ -114,6 +114,9 @@ class GUIDIOsAOsControl(egg.gui.Window):
         """
         Update the value of the voltage on the AOs. 
         Also Automatically write it on the FPGA, with no wait time. 
+        
+        It doesn't clean the existing pulse sequence. It just readjusting the 
+        DIOs and the AOs on the settings
         """
         _debug('GUIDIOsAOsControl: update_fpga')
 
@@ -151,8 +154,9 @@ class GUIDIOsAOsControl(egg.gui.Window):
                                 is_zero_ending=False,
                                 list_DIO_state = self.new_DIO_states)            
         self.fpga.prepare_wait_time(self.fpga.get_wait_time_us()) 
-        # Write it now ;) 
-        self.fpga.write_output()     
+        
+        # Run the FPGA with all these settings
+        self.fpga.lets_go_FPGA()  
         
         # Call the event to say "hey, stuff changed on the fpga"
         self.event_fpga_change()
@@ -193,7 +197,7 @@ class GUIDIOsAOsControl(egg.gui.Window):
 
 if __name__ == '__main__':
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     
     _debug_enabled     = True
     _fc._debug_enabled = False

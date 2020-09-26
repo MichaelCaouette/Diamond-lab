@@ -227,7 +227,7 @@ if __name__ == '__main__':
 #    self.show()
 
     
-    import fpga_control as _fc
+    import api_fpga as _fc
     fpga_fake = _fc.FPGA_fake_api(bitfile_path, resource_num) # Create the api   
     fpga_fake.open_session()
     

@@ -12,7 +12,7 @@ from spinmob import egg
 import traceback
 _p = traceback.print_last #Very usefull command to use for getting the last-not-printed error
 
-import fpga_control as _fc
+import api_fpga as _fc
 from converter import Converter # This convert the sequence object into fpga data
 from pulses import GUIPulsePattern
 from pulses import ChannelPulses, PulsePatternBlock, Sequence
@@ -39,12 +39,20 @@ class GuiMainPulseSequence(egg.gui.Window):
     """
     Main GUI for running the FPGA with pulse sequence. 
     """
-    def __init__(self, fpga, name="Best pulser of the world", size=[1400,700]): 
+    def __init__(self, fpga,  optimizer=-1, 
+                 name="Best pulser of the world", size=[1400,700]): 
         """
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of the fpga must already be open.    
+        optimizer:
+            GUIOptimizer class object. It is for dealing with the optimization
+            during the run of the pulse sequence. This object should be the 
+            optimizer used in the higher level gui. Taking it as an input is
+            just allowing us to use its functionnalities. 
+            If it is set to -1, there will be just nothing happening when it 
+            is time to optimize. 
         """    
         _debug('GuiMainPulseSequence:__init__')
         _debug('Don’t watch the clock; do what it does. Keep going. – Sam Levenson')
@@ -52,8 +60,9 @@ class GuiMainPulseSequence(egg.gui.Window):
         # Run the basic stuff for the initialization
         egg.gui.Window.__init__(self, title=name, size=size)
         
-        
+        # Get the inputs
         self.fpga = fpga           
+        self.optimizer = optimizer
        
         # Some attribute
         self.is_running = False # Weither or not the pulse sequence is running    
@@ -327,6 +336,9 @@ class GuiMainPulseSequence(egg.gui.Window):
         # Set the delay
         self.gui_pulse_builder.button_set_delays.click()
         
+        # Put a very low number of repetition, just in case we forget to do so. 
+        # ecause the sequence is, in general, slow. 
+        self.gui_pulse_builder.NumberBox_repetition.set_value(1)
         
         # Prepare the setting for the signal generator
         self.fmin = self.gui_ESR.treeDic_settings['f_min']
@@ -347,6 +359,10 @@ class GuiMainPulseSequence(egg.gui.Window):
         # Make the instrumenbt ready for the pulse sequence
         # The method should set the trigger to be external, pulse modulatiion, etc. 
         self.sig_gen.api.prepare_for_ESR()
+        
+        # Get the real frequency list
+        fs = np.array(self.sig_gen.api.get_list_frequencies()) # This is in Hz
+        self.gui_ESR.x_axis = fs*1e-9 # In GHz
         
         # Overird the method to be called after each loop
         self.after_one_loop = self.gui_ESR.after_one_loop    
@@ -721,7 +737,16 @@ class GuiMainPulseSequence(egg.gui.Window):
         # Note that it is resetted
         self.is_reseted = True
         
-
+    def prepare_THE_run_loop(self):
+        """
+        Prepare the fpga settings for the run loop
+        """
+        _debug('GuiMainPulseSequence: prepare_THE_run_loop')
+        # Send the data_array to the FPGA and prepare it
+        self.fpga.prepare_pulse(self.data_array) 
+        # Specify the counting mode again
+        self.fpga.set_counting_mode(self.CET_mode)        
+    
     def run_loops(self):
         """
         Perform the loops of the fpga has long as the conditions are met. 
@@ -729,14 +754,13 @@ class GuiMainPulseSequence(egg.gui.Window):
         _debug('GuiMainPulseSequence: run_loops')
         # Rewrite the data in the FPGA, in case they were changed by an other 
         # gui (example: the optimizer between loops)
-        # Send the data_array to the FPGA and prepare it
-        self.fpga.prepare_pulse(self.data_array) 
-        
-        # Specify the counting mode again
-        self.fpga.set_counting_mode(self.CET_mode)
+        self.prepare_THE_run_loop()
 
         condition_loop = True
         while condition_loop:
+            _debug('GuiMainPulseSequence: run_loops: BEFORE self.iter, self.N_loopFPGA, self.is_running, condition_loop',
+                   self.iter,self.N_loopFPGA, self.is_running, condition_loop)
+            
             self.iter += 1
             # Update the label for the number of iteration
             self.iteration_label.set_text('Iteration %d'%self.iter)
@@ -757,20 +781,28 @@ class GuiMainPulseSequence(egg.gui.Window):
             self.process_events()    
             # Update the condition for the while loop
             condition_loop = (self.iter<self.N_loopFPGA) and self.is_running    
+            _debug('GuiMainPulseSequence: run_loops: MIDDLE self.iter, self.N_loopFPGA, self.is_running, condition_loop',
+                   self.iter,self.N_loopFPGA, self.is_running, condition_loop)
             
             # Call the function for optimizing if the condition is met
             # Note that the condition is not meet if N=0. Clever. 
-            if self.Nloop_before_optimize>0:
+            if (self.Nloop_before_optimize>0) and not(self.optimizer==-1):
                 if self.iter%self.Nloop_before_optimize == self.Nloop_before_optimize-1:
-                    print('Cotton Wouate')
-                    self.event_optimize()
+                    _debug('GuiMainPulseSequence: run_loops: event_optimize sent!')
+                    self.optimizer.button_optimize.click()
+                    # The fpga settings change during optimization. 
+                    #We need to put them back.
+                    self.prepare_THE_run_loop()
+                            
+            _debug('GuiMainPulseSequence: run_loops: END self.iter, self.N_loopFPGA, self.is_running, condition_loop',
+                   self.iter,self.N_loopFPGA, self.is_running, condition_loop)
         
         # Loop ended.         
         # Update the buttons
         if self.is_running:
             # Click on stop if it is still running
-            self.button_start_clicked()            
-        
+            self.button_start_clicked()   
+
 
     def after_one_loop(self, counts, iteration, rep):
         """
@@ -798,14 +830,16 @@ class GuiMainPulseSequence(egg.gui.Window):
         _debug('GuiMainPulseSequence: show_sequence')
         
         # Show the GUI
-        GUIFPGAInstruction(self.data_array, self.rep, self.length_data_block_s)
-        
-    def event_optimize(self):
-        """
-        Dummy function that is meant to be overrid. 
-        It gets call whenenver we want to re-optimize the x-y-z positions. 
-        """
-        return
+        GUIFPGAInstruction(self.data_array,self.rep, self.length_data_block_s,
+                           list_DIO_to_show=range(8)) # Only show the 8 first DIO
+
+# TODO Remove if everything is okay
+#    def event_optimize(self):
+#        """
+#        Dummy function that is meant to be overrid. 
+#        It gets call whenenver we want to re-optimize the x-y-z positions. 
+#        """
+#        return
         
 
 
@@ -1058,7 +1092,7 @@ class GUIPredefined(egg.gui.Window):
     def __init__(self, fpga,  name="Counts", size=[700,500]): 
         """
         fpga:
-            "FPGA_api" object from fpga_control.py. 
+            "FPGA_api" object from api_fpga.py. 
             This is the object shared amoung the GUIs for controlling the fpga. 
             The session of the fpga must already be open.
 
@@ -1324,10 +1358,16 @@ class GUIESR(egg.gui.Window):
         # Get useful parameters for the plot
         self.fmin = self.treeDic_settings['f_min']
         self.fmax = self.treeDic_settings['f_max']       
-        self.x_axis = np.linspace(self.fmin,self.fmax, self.nb_block)
         
         
-        # Trigger a dummy function for signaling to prepare stuffs
+        
+        # DO NOT TAKE OUR OWN FREQUENCY LIST !
+        # Please do not use that again !
+#        self.x_axis = np.linspace(self.fmin,self.fmax, self.nb_block)
+        
+        
+        # Trigger a dummy function for signaling to prepare stuffs in the 
+        # higher level GUI
         self.event_prepare_experiment()
         
         
@@ -1400,7 +1440,16 @@ class GUIESR(egg.gui.Window):
         _debug('GUIESR: databoxplot_update')
         # CLear the plot
         self.databoxplot.clear() 
-                
+
+        # Add important information in the header
+        self.databoxplot.insert_header('repetition', self.rep)
+        self.databoxplot.insert_header('iteration' , self.iteration)
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databoxplot.insert_header(key , self.treeDic_settings[key])
+        # The x_axis should be prepared in the external GUI 
+        #TODO Find a way to not rely on the external GUI. For example, load the 
+        #  signal generator in this GUI. 
         self.databoxplot['Frequency_(GHz)'] = self.x_axis
         # Loop over each readout 
         for i, count_per_readout in enumerate(self.counts_total):
@@ -1426,6 +1475,10 @@ class GUIESR(egg.gui.Window):
             Number of repetition of the sequence into the fpga instruction
             """
         _debug('GUIESR: after_one_loop')
+
+        # Note that for saving 
+        self.rep = rep
+        self.iteration = iteration
         
         # Get the counts per readout per block
         self.count_processor = _fc.ProcessFPGACounts(counts)
@@ -1701,12 +1754,22 @@ class GUIRabi(egg.gui.Window):
         _debug('GUIRabi: databoxplot_update')
         # CLear the plot
         self.databoxplot.clear() 
-                
+
+        # Add important information in the header
+        self.databoxplot.insert_header('repetition', self.rep)
+        self.databoxplot.insert_header('iteration' , self.iteration)
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databoxplot.insert_header(key , self.treeDic_settings[key])
+        # Now add the columns        
         self.databoxplot['Time_(us)'] = self.dt_s
-        # Loop over each readout 
-        for i, count_per_readout in enumerate(self.counts_total):
-            # Add a curve
-            self.databoxplot['Total_counts_%d'%i] = count_per_readout
+        self.databoxplot['counts'] = self.counts_total[0]
+        self.databoxplot['reference'] = self.counts_total[1]
+        # TODO Remove this. This is for a general situation
+#        # Loop over each readout 
+#        for i, count_per_readout in enumerate(self.counts_total):
+#            # Add a curve
+#            self.databoxplot['Total_counts_%d'%i] = count_per_readout
             
         # Show it
         self.databoxplot.plot()   
@@ -1726,6 +1789,10 @@ class GUIRabi(egg.gui.Window):
             Number of repetition of the sequence into the fpga instruction
             """
         _debug('GUIRabi: after_one_loop')
+        
+        # Note that for saving 
+        self.rep = rep
+        self.iteration = iteration
         
         # Get the counts per readout per block
         self.count_processor = _fc.ProcessFPGACounts(counts)
@@ -2357,6 +2424,14 @@ class GUICalibration(egg.gui.Window):
         _debug('GUICalibration: databoxplot_update')
         # CLear the plot
         self.databoxplot.clear() 
+
+
+        # Add important information in the header
+        self.databoxplot.insert_header('repetition', self.rep)
+        self.databoxplot.insert_header('iteration' , self.iteration)
+        for key in self.treeDic_settings.get_keys():
+            # Add each element of the dictionnary three
+            self.databoxplot.insert_header(key , self.treeDic_settings[key])
                 
         tmin = self.t_on_read
         tmax = tmin+len(self.counts_total)/120  # Maximum time is the lenght times the tick duration
@@ -2385,6 +2460,10 @@ class GUICalibration(egg.gui.Window):
             Number of repetition of the sequence into the fpga instruction
             """
         _debug('GUICalibration after_one_loop')
+
+        # Note that for saving 
+        self.rep = rep
+        self.iteration = iteration
         
         self.count_processor = _fc.ProcessFPGACounts(fpga_output)
         self.counts = self.count_processor.get_sum_count_per_repetition_CET_mode(rep)
@@ -4267,7 +4346,10 @@ if __name__ == '__main__':
     
     fpga = _fc.FPGA_api(bitfile_path, resource_num) # Create the api   
     fpga.open_session()
-    self = GuiMainPulseSequence(fpga) 
+    import gui_confocal_optimizer
+    optimizer = gui_confocal_optimizer.GUIOptimizer(fpga)
+    optimizer.show() # Hoh yess, we want to see it !
+    self = GuiMainPulseSequence(fpga,optimizer) 
     self.show()
 
     
