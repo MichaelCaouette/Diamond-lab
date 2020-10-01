@@ -1,6 +1,6 @@
 Wait_after_AOs	1000.0
 Wait_after_AOs|expanded	True
-Count_time	5.0
+Count_time	2.0
 Count_time|expanded	True
 AO_x	0
 AO_x|expanded	True
@@ -8,15 +8,15 @@ AO_y	1
 AO_y|expanded	True
 AO_z	2
 AO_z|expanded	True
-X_min	6.985277277195086
+X_min	-0.753301659649369
 X_min|expanded	True
-X_max	7.798731347583361
+X_max	-0.0805313053586848
 X_max|expanded	True
 Nb_point_X	100
 Nb_point_X|expanded	True
-Y_min	-0.2966040909995566
+Y_min	-0.2912445075483436
 Y_min|expanded	True
-Y_max	0.4062351778908971
+Y_max	0.27341311223805836
 Y_max|expanded	True
 Nb_point_Y	100
 Nb_point_Y|expanded	True
