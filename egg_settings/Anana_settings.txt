@@ -1,5 +1,5 @@
 /Anana/VISA|expanded	True
-/Anana/VISA/Device	'USB0::0x03EB::0xAFFF::121-227450000-0385::INSTR'
+/Anana/VISA/Device	'COM7'
 /Anana/VISA/Device|expanded	True
 /Anana/Generate-List|expanded	True
 /Anana/Generate-List/f1	2600000000.0
@@ -16,4 +16,11 @@
 /Anana/Generate-List/Direction|expanded	True
 /Anana/Generate-List/Mode	'Log'
 /Anana/Generate-List/Mode|expanded	True
+/Anana/Sweep|expanded	True
+/Anana/Sweep/Iterations	1
+/Anana/Sweep/Iterations|expanded	True
+/Anana/Sweep/n1	0
+/Anana/Sweep/n1|expanded	True
+/Anana/Sweep/n2	10000000
+/Anana/Sweep/n2|expanded	True
 

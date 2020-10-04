@@ -1,6 +1,6 @@
 Power	10.0
 Power|expanded	True
-Frequency	3.058
+Frequency	2.6907
 Frequency|expanded	True
 N	40
 N|expanded	True
@@ -16,7 +16,7 @@ delay_read_before_laser	0.05
 delay_read_before_laser|expanded	True
 DIO_laser	2
 DIO_laser|expanded	True
-DIO_pulse_modulation	6
+DIO_pulse_modulation	4
 DIO_pulse_modulation|expanded	True
 DIO_sync_scope	5
 DIO_sync_scope|expanded	True

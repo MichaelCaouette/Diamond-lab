@@ -1,5 +1,5 @@
 self.number_upper_bound,10.0
 self.number_lower_bound,-10.0
-self,-3.3599999999999994
+self,-3.5
 _autosettings_standard_items,['self.number_upper_bound', 'self.number_lower_bound', 'self']
 
